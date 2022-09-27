@@ -14,6 +14,27 @@ from rest_framework import mixins
 from rest_framework import viewsets
 from rest_framework.exceptions  import ValidationError
 
+
+from rest_framework.permissions import IsAuthenticated,IsAuthenticatedOrReadOnly
+from watchlist_app.api.permissions import AdminOrReadOnly,ReviewUserOrReadOnlt
+
+
+#Para Filtrar los datos con django -filter 
+###############################################################
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters
+###############################################################
+
+class WatchListFilter(generics.ListAPIView):
+    queryset=WatchList.objects.all()
+    serializer_class=WatchListSerializer
+    #filter_backends=[DjangoFilterBackend]
+    #filterset_fields=['title','plataform__name','avg_rating']
+    filter_backends=[filters.SearchFilter]
+    search_fields=['title','plataform__name','avg_rating']
+
+
+
 class ReviewCreate(generics.CreateAPIView):
 
 
@@ -29,13 +50,25 @@ class ReviewCreate(generics.CreateAPIView):
         if review_Queryset.exists():
             raise ValidationError("Ya tienes una review de esta pelicula")
 
+        #Mecanismo de raiting y avgraiting
+        if movie.number_rating==0:
+            movie.avg_rating=serializer.validated_data['rating']
+        else:
+            movie.avg_rating=(movie.avg_rating + serializer.validated_data['rating'])/2
+
+        movie.number_rating=movie.number_rating + 1
+        movie.save()         
         serializer.save(watchlist=movie,review_user=review_user) 
 
 
 
 class ReviewList(generics.ListAPIView):
     #queryset=Review.objects.all()
+    permission_classes=[IsAuthenticated]
     serializer_class=ReviewsSerializer
+    #Filtrado Bcakends
+    filter_backends=[DjangoFilterBackend]
+    filterset_fields=['review_user__username','active','watchlist']
     def get_queryset(self):
         pk=self.kwargs['pk']
         return Review.objects.filter(watchlist=pk)
